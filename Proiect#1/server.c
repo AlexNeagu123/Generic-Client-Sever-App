@@ -7,11 +7,13 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <sys/socket.h>
+#include <utmp.h>
 
 #define MAX_WORDS 100
 #define MAX_LINE_SIZE 1024
 #define MAX_PATH_SIZE 4096
 #define MAX_USERNAME_SIZE 50
+#define MAX_RESPONSE_SIZE 8192
 
 #define CHECK(condition, message) \
     if (!(condition))             \
@@ -45,7 +47,7 @@ int is_number(char *word);
 void command_parser_deallocate(struct command_parser* command_arguments);
 
 void execute_login(char *username, char *response);
-void execute_get_logged_users();
+void execute_get_logged_users(char *response);
 void execute_get_proc_info();
 void execute_logout();
 void execute_quit();
@@ -65,7 +67,7 @@ int main(int argc, char **argv) {
         for(int i = 0; i < command_arguments.size; ++i) {
             printf("%s\n", command_arguments.arguments[i]);
         }
-        char response[MAX_LINE_SIZE];
+        char response[MAX_RESPONSE_SIZE];
         if(parsing_code == -1) 
             strcpy(response, "Invalid command structure! Please enter a valid command.");
         
@@ -86,7 +88,7 @@ int main(int argc, char **argv) {
                 if(!LOGGED_FLAG) 
                     strcpy(response, "Please login in order to execute this command");
                 else 
-                    execute_get_logged_users();
+                    execute_get_logged_users(response);
                 break;
             }
             case 2: {
@@ -184,6 +186,8 @@ int parse_command(char *command, struct command_parser *command_arguments) {
     }
 
     if (!strcmp(command_name, "get-logged-users")) {
+        if(nr_words != 1)
+            return -1;
         return 1;
     }
 
@@ -261,7 +265,7 @@ void execute_login(char *logged_user, char *response) {
 
 void execute_logout(char *response) {
     LOGGED_FLAG = 0;
-    strcpy(response, "Bye:(");
+    strcpy(response, "Bye :(");
 }
 
 void execute_quit() {
@@ -269,7 +273,44 @@ void execute_quit() {
         LOGGED_FLAG = 0;
 }
 
-void execute_get_logged_users() {}
+void execute_get_logged_users(char *response) {
+    CHECK(pipe(child_parent_pipe) != -1, "[S] Error at socketpair(): ");
+    cpid = fork();
+    if(cpid) {
+        CHECK(close(child_parent_pipe[1]) != -1, "[SP] Error at close(): ");
+        wait(NULL);
+        read_until_eof(child_parent_pipe[0], response);
+        CHECK(close(child_parent_pipe[0]) != -1, "[SP] Error at close(): ");
+    } 
+    else {
+        CHECK(close(child_parent_pipe[0]) != -1, "[SC] Error at close(): ");
+        struct utmp *current_utmp;
+        char returned_message[MAX_RESPONSE_SIZE];
+        int cursor = 0;
+        while((current_utmp = getutent()) != NULL) {
+            char ut_user[UT_NAMESIZE];
+            strncpy(ut_user,  current_utmp -> ut_user, UT_NAMESIZE);
+            char ut_host[UT_HOSTSIZE];
+            strncpy(ut_host, current_utmp -> ut_host, UT_HOSTSIZE);
+            long tv_sec = current_utmp -> ut_tv.tv_sec;
+            char user_info[MAX_LINE_SIZE];
+            sprintf(user_info, "Username: %s\nHostname For Remote Login: %s\nTime Entry Was Made: %lds\n\n", ut_user, ut_host, tv_sec);
+            for(int i = 0; i < strlen(user_info); ++i) {
+                returned_message[cursor++] = user_info[i];
+            }
+        }
+        if(cursor && returned_message[cursor - 1] == '\n')
+        returned_message[cursor - 1] = '\0';
+        else 
+            returned_message[cursor] = '\0';
+        printf("%s\n", returned_message);
+        int write_res = write(child_parent_pipe[1], returned_message, strlen(returned_message));
+        CHECK(write_res != -1, "[SC] Error at write(): ");
+        CHECK(close(child_parent_pipe[1]) != -1, "[SC] Error at close(): ");
+        exit(0);
+    }
+}
+
 void execute_get_proc_info(char *process_pid, char *response) {
     CHECK(pipe(child_parent_pipe) != -1, "[S] Error at socketpair(): ");
     cpid = fork();
@@ -302,10 +343,6 @@ void execute_get_proc_info(char *process_pid, char *response) {
                     }
                 }
             }
-            if(return_message[cursor - 1] == '\n')
-                return_message[cursor - 1] = '\0';
-            else
-                return_message[cursor] = '\0';
         }
         printf("%s\n", return_message);
         int write_res = write(child_parent_pipe[1], return_message, strlen(return_message));

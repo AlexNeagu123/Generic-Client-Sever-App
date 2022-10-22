@@ -36,10 +36,10 @@ void open_fifos() {
 int main(int argc, char **argv) {
 
     open_fifos();
-    printf("Afiseaza comenzi pe care sa i le transmiti serverului\n");
-    fflush(stdout);
 
     while(1) {
+        printf("-> ");
+        fflush(stdout);
         char input[MAX_SIZE];
         if(fgets(input, MAX_SIZE, stdin) == NULL) {
             fprintf(stderr, "Something unexpected was typed by the client");
