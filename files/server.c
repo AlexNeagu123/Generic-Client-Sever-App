@@ -8,6 +8,7 @@
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <utmp.h>
+#include <time.h>
 
 #define MAX_RESPONSE_SIZE 8192
 #define MAX_PATH_SIZE 4096
@@ -165,7 +166,7 @@ int parse_command(char *command, struct command_parser *command_arguments) {
     char *word = strtok(copy, " ");
 
     while(word != NULL) {
-        strcpy(command_arguments->arguments[nr_words++], word);
+        strncpy(command_arguments->arguments[nr_words++], word, MAX_COMMAND_SIZE);
         word = strtok(NULL, " ");
     }
 
@@ -238,7 +239,6 @@ void execute_login(char *logged_user, char *response) {
         char valid_user[MAX_USERNAME_SIZE];
         int FOUND_FLAG = 0;
         while(read_until_eoln(fd, valid_user) != -1) {
-            printf("%s\n", valid_user);
             if(!strncmp(valid_user, logged_user, MAX_USERNAME_SIZE)) {
                 FOUND_FLAG = 1;
                 break;
@@ -284,12 +284,13 @@ void execute_get_logged_users(char *response) {
         int cursor = 0;
         while((current_utmp = getutent()) != NULL) {
             char ut_user[UT_NAMESIZE];
-            strncpy(ut_user,  current_utmp -> ut_user, UT_NAMESIZE);
+            strncpy(ut_user,  current_utmp->ut_user, UT_NAMESIZE);
             char ut_host[UT_HOSTSIZE];
-            strncpy(ut_host, current_utmp -> ut_host, UT_HOSTSIZE);
-            long tv_sec = current_utmp -> ut_tv.tv_sec;
+            strncpy(ut_host, current_utmp->ut_host, UT_HOSTSIZE);
+            const long int tv_sec = current_utmp -> ut_tv.tv_sec;
+            char *calendaristic_date = ctime(&tv_sec);
             char user_info[MAX_BUFF_SIZE];
-            int utmp_length = snprintf(user_info, MAX_BUFF_SIZE, "Username: %s\nHostname For Remote Login: %s\nTime Entry Was Made: %lds\n\n", ut_user, ut_host, tv_sec);
+            int utmp_length = snprintf(user_info, MAX_BUFF_SIZE, "Username: %s\nHostname For Remote Login: %s\nTime Entry Was Made: %lds\nCalendaristic Date: %s\n", ut_user, ut_host, tv_sec, calendaristic_date);
             CHECK(utmp_length >= 0, "[S] Error at sprintf(): ");
             for(int i = 0; i < utmp_length; ++i) {
                 returned_message[cursor++] = user_info[i];

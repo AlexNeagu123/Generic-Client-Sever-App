@@ -9,7 +9,7 @@
 #include <sys/socket.h>
 
 #define MAX_RESPONSE_SIZE 8192
-#define MAX_COMMAND_SIZE 1024 
+#define MAX_COMMAND_SIZE 1024
 
 #define CHECK(condition, message) \
     if (!(condition))             \
@@ -23,7 +23,8 @@ int client_server_fifo_d;
 const char *READ_FIFO_NAME = "server_client_fifo";
 int server_client_fifo_d;
 
-void open_fifos() {
+void open_fifos()
+{
     if (access(WRITE_FIFO_NAME, F_OK) == -1)
         CHECK(mknod(WRITE_FIFO_NAME, S_IFIFO | 0666, 0) != -1, "[C] Error at mknod(): ");
     client_server_fifo_d = open(WRITE_FIFO_NAME, O_WRONLY);
@@ -35,20 +36,23 @@ void open_fifos() {
     CHECK(server_client_fifo_d != -1, "[C] Error at open(): ");
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
 
     open_fifos();
-    
-    while(1) {
+    while (1)
+    {
         printf("-> ");
         fflush(stdout);
         char input[MAX_COMMAND_SIZE];
-        if(fgets(input, MAX_COMMAND_SIZE, stdin) == NULL) {
+        if (fgets(input, MAX_COMMAND_SIZE, stdin) == NULL)
+        {
             fprintf(stderr, "Something unexpected was typed by the client");
             break;
         }
         CHECK(write(client_server_fifo_d, input, strlen(input)) != -1, "[C] Error at write(): ");
-        if(!strcmp(input, "quit\n")) {
+        if (!strcmp(input, "quit\n"))
+        {
             exit(0);
         }
         int response_len;
